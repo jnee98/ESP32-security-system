@@ -1,0 +1,6 @@
+secrets.h
+.pio/
+build/
+*.o
+*.bin
+.DS_Store
