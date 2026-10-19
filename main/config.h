@@ -11,24 +11,27 @@
 // ESP32-C6 has GPIOs 0-22 only (GPIO 8 is onboard RGB LED)
 // ---------------------------------------------------------------------------
 // Ultrasonic Sensor (HC-SR04 or compatible)
-#define PIN_ULTRASONIC_TRIG       4
-#define PIN_ULTRASONIC_ECHO       5
+#define PIN_ULTRASONIC_TRIG       18
+#define PIN_ULTRASONIC_ECHO       19
 
 // Reed Switch (door/window) - NC = closed when magnet present
 // Wire: GPIO -> Reed Switch -> GND (uses internal pullup)
-#define PIN_REED_SWITCH           6
+#define PIN_REED_SWITCH           20
 
 // IR Tripwire Receiver (TSOP38238, VS1838B, etc.)
 // Output is ACTIVE LOW when 38kHz IR detected (beam intact)
 // Beam broken = HIGH
-#define PIN_IR_RECEIVER           7
+#define PIN_IR_RECEIVER           21
+
+// Arm/Disarm Button (active LOW with internal pullup)
+#define PIN_ARM_BUTTON            22
 
 // Status LEDs (active HIGH)
-#define PIN_LED_ARMED             10   // Green - system armed
-#define PIN_LED_ALARM             11   // Red - alarm active
+#define PIN_LED_ARMED             2   // Green - system armed
+#define PIN_LED_ALARM             3   // Red - alarm active
 
 // Buzzer/Siren (active HIGH)
-#define PIN_BUZZER                12
+#define PIN_BUZZER                10
 
 // Optional: IR Emitter control (if you want to pulse it to save power)
 // #define PIN_IR_EMITTER           4
