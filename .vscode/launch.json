@@ -1,0 +1,23 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "ESP-IDF: Flash and Debug",
+            "type": "esp-idf",
+            "request": "launch",
+            "espIdfPath": "${config:esp-idf.idfPath}",
+            "toolchainPrefix": "riscv32-esp-elf-",
+            "debugServerPath": "bin/openocd",
+            "configFiles": [
+                "interface/ftdi/esp32_devkitj_v1.cfg",
+                "target/esp32c6.cfg"
+            ],
+            "extraArgs": [],
+            "openOCDLaunchCommands": [
+                "reset halt"
+            ],
+            "preLaunchTask": "ESP-IDF: Build",
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}

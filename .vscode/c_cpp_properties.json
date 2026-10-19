@@ -1,0 +1,31 @@
+{
+    "configurations": [
+        {
+            "name": "ESP-IDF",
+            "includePath": [
+                "${config:esp-idf.idfPath}/components/**",
+                "${workspaceFolder}/**"
+            ],
+            "defines": [
+                "ESP_PLATFORM",
+                "CONFIG_IDF_TARGET_ESP32C6",
+                "CONFIG_IDF_TARGET=\"esp32c6\"",
+                "CONFIG_FREERTOS_UNICORE",
+                "CONFIG_ESP32C6_REV_MIN=0",
+                "CONFIG_ESP32C6_REV_MIN_FULL=100",
+                "CONFIG_IDF_FIRMWARE_CHIP_ID=0x0005"
+            ],
+            "compilerPath": "C:/Users/Admin/.espressif/tools/riscv32-esp-elf/esp-13.2.0_20240530/riscv32-esp-elf/bin/riscv32-esp-elf-gcc.exe",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64",
+            "compilerArgs": [
+                "-mlongcalls",
+                "-mno-relax",
+                "-mabi=ilp32",
+                "-march=rv32imac"
+            ]
+        }
+    ],
+    "version": 4
+}

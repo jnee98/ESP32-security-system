@@ -1,0 +1,10 @@
+{
+    "esp-idf.idfPath": "C:\\jnee98\\my-esp32-projects\\ESP32-security-system\\esp-idf-v5.3.1",
+    "esp-idf.pythonPath": "C:\\Users\\Admin\\.espressif\\python_env\\idf5.3_py3.11_env\\Scripts\\python.exe",
+    "esp-idf.idfToolPath": "C:\\Users\\Admin\\.espressif",
+    "esp-idf.useEspIdfTerminal": true,
+    "esp-idf.openOcdDebugging": true,
+    "esp-idf.loggingLevel": "info",
+    "terminal.integrated.shell.windows": "C:\\Windows\\System32\\cmd.exe",
+    "terminal.integrated.shellArgs.windows": ["/k", "C:\\jnee98\\my-esp32-projects\\ESP32-security-system\\esp-idf-v5.3.1\\export.bat"]
+}
