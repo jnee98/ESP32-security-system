@@ -14,11 +14,12 @@ Or open the diagram directly in this repo and click "Run simulation".
 
 | Feature | Details |
 |---|---|
-| **Ultrasonic sensor (HC-SR04)** | Distance-based intrusion detection (GPIO 4 Trig, GPIO 5 Echo) |
-| **Reed switch** | Door/window open detection (GPIO 6, internal pullup) |
-| **IR tripwire receiver** | Beam-break detection (GPIO 7, TSOP38238/VS1838B) |
-| **Buzzer / siren** | PWM-driven beeper with different patterns per state (GPIO 12) |
-| **Status LEDs** | Armed (green, GPIO 10), Alarm (red, GPIO 11) |
+| **Ultrasonic sensor (HC-SR04)** | Distance-based intrusion detection (GPIO 18 Trig, GPIO 19 Echo) |
+| **Reed switch** | Door/window open detection (GPIO 20, internal pullup) |
+| **IR tripwire receiver** | Beam-break detection (GPIO 21, TSOP38238/VS1838B) |
+| **Arm/Disarm button** | Physical button to arm/disarm (GPIO 22, internal pullup) |
+| **Buzzer / siren** | PWM-driven beeper with different patterns per state (GPIO 10) |
+| **Status LEDs** | Armed (green, GPIO 2), Alarm (red, GPIO 3) |
 | **State machine** | Disarmed → Exiting → Armed → Entry → Alarm, with entry/exit delays and alarm auto-timeout |
 | **NVS persistence** | Alarm state survives reboot |
 | **UART CLI** | Serial commands: `A`=Arm, `D`=Disarm, `S`=Status, `R`=Reset NVS |
@@ -28,24 +29,28 @@ Or open the diagram directly in this repo and click "Run simulation".
 
 | ESP32-C6 GPIO | Component | Notes |
 |---|---|---|
-| 4 | Ultrasonic TRIG | Output |
-| 5 | Ultrasonic ECHO | Input |
-| 6 | Reed switch | INPUT_PULLUP, other side to GND |
-| 7 | IR receiver | Active LOW when beam intact, HIGH when broken |
-| 10 | Armed LED (green) | +220 Ω resistor |
-| 11 | Alarm LED (red) | +220 Ω resistor |
-| 12 | Buzzer / siren | Active buzzer, PWM driven |
+| 2 | Armed LED (green) | +220 Ω resistor |
+| 3 | Alarm LED (red) | +220 Ω resistor |
+| 10 | Buzzer / siren | Active buzzer, PWM driven |
+| 18 | Ultrasonic TRIG | Output |
+| 19 | Ultrasonic ECHO | Input |
+| 20 | Reed switch | INPUT_PULLUP, other side to GND |
+| 21 | IR receiver | Active LOW when beam intact, HIGH when broken |
+| 22 | Arm/Disarm button | INPUT_PULLUP, other side to GND |
 
 > **Note:** GPIO 8 is the onboard RGB LED on the ESP32-C6 DevKitC-1 — avoid using it for security LEDs.
 
+### Arm/Disarm button wiring
+Connect one side of the button to GPIO 22 and the other to GND. Press and release to toggle arm/disarm (short press). The button is debounced in software.
+
 ### Reed switch wiring
-Connect one side of the reed switch to GPIO 6 and the other to GND. Place the magnet on the moving part (door/window) so it sits next to the reed switch when closed. With `INPUT_PULLUP`, the pin reads HIGH when the magnet is near (door closed) and LOW when the magnet moves away (door open).
+Connect one side of the reed switch to GPIO 20 and the other to GND. Place the magnet on the moving part (door/window) so it sits next to the reed switch when closed. With `INPUT_PULLUP`, the pin reads HIGH when the magnet is near (door closed) and LOW when the magnet moves away (door open).
 
 ### IR tripwire wiring
-Connect the IR receiver output to GPIO 7. When the 38 kHz IR beam is intact, the receiver output is LOW (active). When the beam is broken, the output goes HIGH.
+Connect the IR receiver output to GPIO 21. When the 38 kHz IR beam is intact, the receiver output is LOW (active). When the beam is broken, the output goes HIGH.
 
 ### Ultrasonic wiring
-Connect HC-SR04 VCC→3.3V/5V, GND→GND, TRIG→GPIO 4, ECHO→GPIO 5.
+Connect HC-SR04 VCC→3.3V/5V, GND→GND, TRIG→GPIO 18, ECHO→GPIO 19.
 
 ## Software setup (ESP-IDF)
 
@@ -118,13 +123,14 @@ DISARMED  --(A/Arm)-->  EXITING  --(exit delay)-->  ARMED
 Edit `main/config.h` to change pins, timing, and thresholds:
 
 ```c
-#define PIN_ULTRASONIC_TRIG       4
-#define PIN_ULTRASONIC_ECHO       5
-#define PIN_REED_SWITCH           6
-#define PIN_IR_RECEIVER           7
-#define PIN_LED_ARMED             10
-#define PIN_LED_ALARM             11
-#define PIN_BUZZER                12
+#define PIN_ULTRASONIC_TRIG       18
+#define PIN_ULTRASONIC_ECHO       19
+#define PIN_REED_SWITCH           20
+#define PIN_IR_RECEIVER           21
+#define PIN_ARM_BUTTON            22
+#define PIN_LED_ARMED             2
+#define PIN_LED_ALARM             3
+#define PIN_BUZZER                10
 
 #define ULTRASONIC_TRIGGER_CM     50    // Trigger if object closer than this
 #define EXIT_DELAY_MS             30000 // 30 seconds
