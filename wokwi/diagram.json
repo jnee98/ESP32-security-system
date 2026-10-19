@@ -1,28 +1,62 @@
 {
   "version": 1,
-  "author": "jnee98",
+  "author": "Home Security System Project",
   "editor": "wokwi",
   "parts": [
-    { "type": "wokwi-esp32-c6-devkit", "id": "esp", "top": 0, "left": 0, "attrs": {} },
-    { "type": "wokwi-hc-sr04", "id": "ultra", "top": 0, "left": 180, "attrs": {} },
-    { "type": "wokwi-led", "id": "ledArmed", "top": 80, "left": 120, "attrs": { "color": "green" } },
-    { "type": "wokwi-led", "id": "ledAlarm", "top": 140, "left": 120, "attrs": { "color": "red" } },
-    { "type": "wokwi-piezo-buzzer", "id": "buzzer", "top": 200, "left": 120, "attrs": {} },
-    { "type": "wokwi-pushbutton", "id": "reed", "top": 280, "left": 120, "attrs": {} },
-    { "type": "wokwi-pushbutton", "id": "irTripwire", "top": 340, "left": 120, "attrs": {} }
+    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 340.84, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultrasonic", "top": -20, "left": 120, "attrs": {} },
+    { "type": "wokwi-led", "id": "ledArmed", "top": -60, "left": 560, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "ledAlarm", "top": 0, "left": 560, "attrs": { "color": "red" } },
+    { "type": "wokwi-resistor", "id": "r1", "top": -20, "left": 500, "attrs": { "value": "220" } },
+    { "type": "wokwi-resistor", "id": "r2", "top": 40, "left": 500, "attrs": { "value": "220" } },
+    { "type": "wokwi-buzzer", "id": "buzzer", "top": 80, "left": 560, "attrs": { "volume": "0.1" } },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "reedSwitch",
+      "top": 200,
+      "left": 120,
+      "attrs": { "color": "blue", "label": "Reed" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "irBeam",
+      "top": 260,
+      "left": 120,
+      "attrs": { "color": "yellow", "label": "IR beam" }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn1",
+      "top": 320,
+      "left": 120,
+      "attrs": { "color": "green", "label": "Arm" }
+    }
   ],
   "connections": [
-    [ "esp:4", "ultra:TRIG", "" ],
-    [ "esp:5", "ultra:ECHO", "" ],
-    [ "esp:6", "reed:1", "" ],
-    [ "reed:2", "esp:GND.1", "" ],
-    [ "esp:7", "irTripwire:1", "" ],
-    [ "irTripwire:2", "esp:GND.2", "" ],
-    [ "esp:10", "ledArmed:A", "" ],
-    [ "ledArmed:C", "esp:GND.3", "" ],
-    [ "esp:11", "ledAlarm:A", "" ],
-    [ "ledAlarm:C", "esp:GND.4", "" ],
-    [ "esp:12", "buzzer:1", "" ],
-    [ "buzzer:2", "esp:GND.5", "" ]
-  ]
+    [ "ultrasonic:TRIG", "esp:32", "green", [] ],
+    [ "ultrasonic:ECHO", "esp:33", "yellow", [] ],
+    [ "ultrasonic:VCC", "esp:5V", "red", [] ],
+    [ "ultrasonic:GND", "esp:GND.1", "black", [] ],
+
+    [ "esp:25", "reedSwitch:1.l", "blue", [] ],
+    [ "reedSwitch:2.l", "esp:GND.1", "black", [] ],
+
+    [ "esp:26", "irBeam:1.l", "magenta", [] ],
+    [ "irBeam:2.l", "esp:GND.1", "black", [] ],
+
+    [ "esp:4", "btn1:1.l", "green", [] ],
+    [ "btn1:2.l", "esp:GND.1", "black", [] ],
+
+    [ "esp:27", "r1:1", "green", [] ],
+    [ "r1:2", "ledArmed:A", "green", [] ],
+    [ "ledArmed:C", "esp:GND.2", "black", [] ],
+
+    [ "esp:14", "r2:1", "red", [] ],
+    [ "r2:2", "ledAlarm:A", "red", [] ],
+    [ "ledAlarm:C", "esp:GND.2", "black", [] ],
+
+    [ "esp:13", "buzzer:1", "orange", [] ],
+    [ "buzzer:2", "esp:GND.2", "black", [] ]
+  ],
+  "dependencies": {}
 }
