@@ -1,5 +1,5 @@
 /*
- * ESP32 Home Security System - Wokwi Simulation Prototype
+ * ESP32-C6 Home Security System - Wokwi Simulation Prototype
  *
  * Sensors: HC-SR04 ultrasonic, reed switch, IR break-beam (simulated by button)
  * Outputs: armed LED, alarm LED, buzzer
@@ -8,23 +8,23 @@
  * States:
  *   DISARMED -> (arm) -> EXITING -> (delay) -> ARMED
  *   ARMED    -> (sensor trip) -> ENTRY -> (delay) -> ALARM
- *   ENTRY/ALARM/EXITING/ARMED -> (disarm) -> DISARMED
+ *   Any state -> (disarm) -> DISARMED
  *
  * Serial: 'A' arm, 'D' disarm, 'S' status
- * Button (GPIO4): toggles arm/disarm
+ * Button (GPIO22): toggles arm/disarm
  */
 
 #include <Arduino.h>
 
-// ---------------- Pins (ESP32-C6 DevKit: GPIO 0-21) ----------------
-const int PIN_TRIG      = 2;   // TRIG
-const int PIN_ECHO      = 3;   // ECHO
-const int PIN_REED      = 4;   // Reed switch (INPUT_PULLUP, LOW = open)
-const int PIN_IR        = 5;   // IR tripwire (INPUT_PULLUP, LOW = broken)
-const int PIN_BTN       = 6;   // Arm/disarm button (INPUT_PULLUP)
-const int PIN_LED_ARMED = 7;   // Armed LED (via 220Ω)
-const int PIN_LED_ALARM = 8;   // Alarm LED (via 220Ω)
-const int PIN_BUZZER    = 9;   // Buzzer (PWM)
+// ---------------- Pins (ESP32-C6-DevKitC-1) ----------------
+const int PIN_TRIG      = 18;
+const int PIN_ECHO      = 19;
+const int PIN_REED      = 20;  // pressed/LOW = door open
+const int PIN_IR        = 21;  // pressed/LOW = beam broken
+const int PIN_BTN       = 22;  // arm/disarm toggle
+const int PIN_LED_ARMED = 2;
+const int PIN_LED_ALARM = 3;
+const int PIN_BUZZER    = 10;
 
 // ---------------- Timing (ms) ----------------
 const unsigned long EXIT_DELAY_MS       = 5000;

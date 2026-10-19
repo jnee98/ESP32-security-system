@@ -33,29 +33,29 @@
     }
   ],
   "connections": [
-    [ "ultrasonic:TRIG", "esp:2", "green", [] ],
-    [ "ultrasonic:ECHO", "esp:3", "yellow", [] ],
+    [ "ultrasonic:TRIG", "esp:18", "green", [] ],
+    [ "ultrasonic:ECHO", "esp:19", "yellow", [] ],
     [ "ultrasonic:VCC", "esp:5V", "red", [] ],
     [ "ultrasonic:GND", "esp:GND.1", "black", [] ],
 
-    [ "esp:4", "reedSwitch:1.l", "blue", [] ],
+    [ "esp:20", "reedSwitch:1.l", "blue", [] ],
     [ "reedSwitch:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:5", "irBeam:1.l", "magenta", [] ],
+    [ "esp:21", "irBeam:1.l", "magenta", [] ],
     [ "irBeam:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:6", "btn1:1.l", "green", [] ],
+    [ "esp:22", "btn1:1.l", "green", [] ],
     [ "btn1:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:7", "r1:1", "green", [] ],
+    [ "esp:2", "r1:1", "green", [] ],
     [ "r1:2", "ledArmed:A", "green", [] ],
     [ "ledArmed:C", "esp:GND.2", "black", [] ],
 
-    [ "esp:8", "r2:1", "red", [] ],
+    [ "esp:3", "r2:1", "red", [] ],
     [ "r2:2", "ledAlarm:A", "red", [] ],
     [ "ledAlarm:C", "esp:GND.2", "black", [] ],
 
-    [ "esp:9", "buzzer:1", "orange", [] ],
+    [ "esp:10", "buzzer:1", "orange", [] ],
     [ "buzzer:2", "esp:GND.2", "black", [] ]
   ],
   "dependencies": {}
