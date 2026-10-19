@@ -2,4 +2,4 @@
 type = "arduino"
 sketch = "sketch.ino"
 diagram = "wokwi/diagram.json"
-board = "esp32"
+board = "esp32c6"

@@ -3,7 +3,7 @@
   "author": "Home Security System Project",
   "editor": "wokwi",
   "parts": [
-    { "type": "board-esp32-devkit-c-v4", "id": "esp", "top": 0, "left": 340.84, "attrs": {} },
+    { "type": "wokwi-esp32-c6-devkit", "id": "esp", "top": 0, "left": 340.84, "attrs": {} },
     { "type": "wokwi-hc-sr04", "id": "ultrasonic", "top": -20, "left": 120, "attrs": {} },
     { "type": "wokwi-led", "id": "ledArmed", "top": -60, "left": 560, "attrs": { "color": "green" } },
     { "type": "wokwi-led", "id": "ledAlarm", "top": 0, "left": 560, "attrs": { "color": "red" } },
@@ -33,29 +33,29 @@
     }
   ],
   "connections": [
-    [ "ultrasonic:TRIG", "esp:32", "green", [] ],
-    [ "ultrasonic:ECHO", "esp:33", "yellow", [] ],
+    [ "ultrasonic:TRIG", "esp:2", "green", [] ],
+    [ "ultrasonic:ECHO", "esp:3", "yellow", [] ],
     [ "ultrasonic:VCC", "esp:5V", "red", [] ],
     [ "ultrasonic:GND", "esp:GND.1", "black", [] ],
 
-    [ "esp:25", "reedSwitch:1.l", "blue", [] ],
+    [ "esp:4", "reedSwitch:1.l", "blue", [] ],
     [ "reedSwitch:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:26", "irBeam:1.l", "magenta", [] ],
+    [ "esp:5", "irBeam:1.l", "magenta", [] ],
     [ "irBeam:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:4", "btn1:1.l", "green", [] ],
+    [ "esp:6", "btn1:1.l", "green", [] ],
     [ "btn1:2.l", "esp:GND.1", "black", [] ],
 
-    [ "esp:27", "r1:1", "green", [] ],
+    [ "esp:7", "r1:1", "green", [] ],
     [ "r1:2", "ledArmed:A", "green", [] ],
     [ "ledArmed:C", "esp:GND.2", "black", [] ],
 
-    [ "esp:14", "r2:1", "red", [] ],
+    [ "esp:8", "r2:1", "red", [] ],
     [ "r2:2", "ledAlarm:A", "red", [] ],
     [ "ledAlarm:C", "esp:GND.2", "black", [] ],
 
-    [ "esp:13", "buzzer:1", "orange", [] ],
+    [ "esp:9", "buzzer:1", "orange", [] ],
     [ "buzzer:2", "esp:GND.2", "black", [] ]
   ],
   "dependencies": {}

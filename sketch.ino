@@ -16,15 +16,15 @@
 
 #include <Arduino.h>
 
-// ---------------- Pins ----------------
-const int PIN_TRIG      = 32;
-const int PIN_ECHO      = 33;
-const int PIN_REED      = 25;  // pressed/LOW = door open
-const int PIN_IR        = 26;  // pressed/LOW = beam broken
-const int PIN_BTN       = 4;   // arm/disarm toggle
-const int PIN_LED_ARMED = 27;
-const int PIN_LED_ALARM = 14;
-const int PIN_BUZZER    = 13;
+// ---------------- Pins (ESP32-C6 DevKit: GPIO 0-21) ----------------
+const int PIN_TRIG      = 2;   // TRIG
+const int PIN_ECHO      = 3;   // ECHO
+const int PIN_REED      = 4;   // Reed switch (INPUT_PULLUP, LOW = open)
+const int PIN_IR        = 5;   // IR tripwire (INPUT_PULLUP, LOW = broken)
+const int PIN_BTN       = 6;   // Arm/disarm button (INPUT_PULLUP)
+const int PIN_LED_ARMED = 7;   // Armed LED (via 220Ω)
+const int PIN_LED_ALARM = 8;   // Alarm LED (via 220Ω)
+const int PIN_BUZZER    = 9;   // Buzzer (PWM)
 
 // ---------------- Timing (ms) ----------------
 const unsigned long EXIT_DELAY_MS       = 5000;
