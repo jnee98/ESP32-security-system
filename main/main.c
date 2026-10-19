@@ -42,6 +42,7 @@ typedef struct {
     bool reed_open;
     bool tripwire_broken;
     uint64_t last_ultrasonic_ms;
+    uint64_t last_reed_ms;
     uint64_t last_tripwire_ms;
     uint64_t last_status_print_ms;
     uint8_t reed_stable_count;
@@ -54,6 +55,7 @@ sensor_state_t g_sensors = {0};
 
 bool g_alarm_latched = false;
 bool g_alarm_auto_timed_out = false;
+static bool g_button_last_state = false;  // Track button press state
 
 // ============================================================================
 // NVS
@@ -70,6 +72,7 @@ static void update_buzzer(uint64_t now_ms);
 static void read_ultrasonic(void);
 static void read_reed_switch(void);
 static void read_tripwire(void);
+static void read_arm_button(void);
 static void handle_serial_command(char c);
 static void print_status(void);
 static void save_state_to_nvs(void);
@@ -188,6 +191,14 @@ static void gpio_init(void) {
     gpio_set_level(PIN_LED_ARMED, 0);
     gpio_set_level(PIN_LED_ALARM, 0);
 
+    // Arm/Disarm Button (INPUT_PULLUP, active LOW)
+    io_conf.pin_bit_mask = (1ULL << PIN_ARM_BUTTON);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+    io_conf.intr_type = GPIO_INTR_DISABLE;
+    gpio_config(&io_conf);
+
     // Buzzer PWM
     buzzer_pwm_init();
     buzzer_set_duty(0);
@@ -261,6 +272,10 @@ static void read_ultrasonic(void) {
 // Reed Switch
 // ============================================================================
 static void read_reed_switch(void) {
+    uint64_t now = get_time_ms();
+    if (now - g_sensors.last_reed_ms < REED_CHECK_MS) return;
+    g_sensors.last_reed_ms = now;
+
     bool raw = (gpio_get_level(PIN_REED_SWITCH) == 0); // LOW = open (magnet away)
 
     if (raw != g_sensors.last_reed_raw) {
@@ -269,7 +284,7 @@ static void read_reed_switch(void) {
         return;
     }
 
-    if (g_sensors.reed_stable_count < (REED_DEBOUNCE_MS / ULTRASONIC_CHECK_MS)) {
+    if (g_sensors.reed_stable_count < (REED_DEBOUNCE_MS / REED_CHECK_MS)) {
         g_sensors.reed_stable_count++;
         return;
     }
@@ -302,8 +317,41 @@ static void read_tripwire(void) {
 }
 
 // ============================================================================
-// State Machine
+// Arm/Disarm Button
 // ============================================================================
+static void read_arm_button(void) {
+    static bool last_raw = true;  // HIGH = not pressed (pullup)
+    static uint8_t stable_count = 0;
+
+    bool raw = (gpio_get_level(PIN_ARM_BUTTON) == 0);  // LOW = pressed
+
+    if (raw != last_raw) {
+        stable_count = 0;
+        last_raw = raw;
+        return;
+    }
+
+    if (stable_count < 3) {
+        stable_count++;
+        return;
+    }
+
+    // Button pressed (rising edge: was not pressed, now pressed)
+    if (raw && !g_button_last_state) {
+        g_button_last_state = true;
+        if (g_state == STATE_DISARMED) {
+            enter_state(STATE_EXITING);
+            ESP_LOGI(TAG, "Button: Arming - exit delay started");
+        } else {
+            enter_state(STATE_DISARMED);
+            ESP_LOGI(TAG, "Button: Disarmed");
+        }
+    }
+    // Button released
+    else if (!raw && g_button_last_state) {
+        g_button_last_state = false;
+    }
+}
 static void enter_state(system_state_t new_state) {
     g_state = new_state;
     g_state_start_ms = get_time_ms();
@@ -528,6 +576,7 @@ void app_main(void) {
         read_ultrasonic();
         read_reed_switch();
         read_tripwire();
+        read_arm_button();
 
         // Check for sensor triggers
         bool any_triggered = g_sensors.ultrasonic_triggered || g_sensors.reed_open || g_sensors.tripwire_broken;

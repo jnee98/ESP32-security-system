@@ -62,6 +62,7 @@
 
 // Reed switch debouncing
 #define REED_DEBOUNCE_MS          50
+#define REED_CHECK_MS             10     // How often to check reed switch
 
 // IR receiver - number of consecutive reads to confirm state change
 #define IR_CONFIRM_READS          3
