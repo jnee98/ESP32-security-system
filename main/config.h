@@ -49,7 +49,7 @@
 #define TRIPWIRE_CHECK_MS         50     // How often to check IR receiver
 #define STATUS_PRINT_MS           5000   // Periodic status print interval
 
-#define EXIT_DELAY_MS             30000  // 30 seconds to exit after arming
+#define EXIT_DELAY_MS             3000  // 30 seconds to exit after arming
 #define ENTRY_DELAY_MS            10000  // 10 seconds to disarm after entry
 #define ALARM_TIMEOUT_MS          60000  // 60 seconds siren timeout (legal limits)
 
@@ -58,7 +58,7 @@
 // ---------------------------------------------------------------------------
 #define ULTRASONIC_TRIGGER_CM     50     // Trigger if object closer than this
 #define ULTRASONIC_MAX_CM         400    // Max valid reading (HC-SR04 limit)
-#define ULTRASONIC_SAMPLES        3      // Median filter samples
+#define ULTRASONIC_SAMPLES        2     // Median filter samples
 
 // Reed switch debouncing
 #define REED_DEBOUNCE_MS          50
@@ -66,6 +66,9 @@
 
 // IR receiver - number of consecutive reads to confirm state change
 #define IR_CONFIRM_READS          3
+
+// Enable/disable IR tripwire (set to 0 if no IR transmitter installed)
+#define IR_TRIPWIRE_ENABLED       0
 
 // ---------------------------------------------------------------------------
 // Buzzer Patterns (on_ms, off_ms)
@@ -82,9 +85,37 @@
 // ---------------------------------------------------------------------------
 #define ENABLE_PERSISTENT_STATE   1      // Save alarm state to NVS
 #define ENABLE_WATCHDOG           0      // Hardware watchdog timer (disabled for ESP32-C6 testing)
-#define ENABLE_WIFI               0      // WiFi for remote monitoring (future)
+#define ENABLE_WIFI               1      // WiFi for remote monitoring
 #define ENABLE_OTA                0      // OTA updates (future)
 #define ENABLE_DEEP_SLEEP         0      // Deep sleep between checks (battery)
+
+// ---------------------------------------------------------------------------
+// WiFi Configuration (set when ENABLE_WIFI = 1)
+// ---------------------------------------------------------------------------
+#define WIFI_SSID                 "!..!"
+#define WIFI_PASSWORD             "john12@#"
+#define WIFI_MAX_RETRY            5      // Connection retries
+#define WIFI_RETRY_DELAY_MS       2000   // Delay between retries
+
+// ---------------------------------------------------------------------------
+// Web Server Configuration (requires ENABLE_WIFI = 1)
+// ---------------------------------------------------------------------------
+#define WEB_SERVER_PORT           80     // HTTP port
+#define WEB_SERVER_MAX_URI_HANDLERS 16   // Max URI handlers
+
+// ---------------------------------------------------------------------------
+// MQTT Configuration (optional, requires ENABLE_WIFI = 1)
+// ---------------------------------------------------------------------------
+#define MQTT_ENABLED              1     // Set to 1 to enable MQTT
+#define MQTT_BROKER_URI           "mqtt://broker.hivemq.com:1883"
+#define MQTT_CLIENT_ID            "esp32-security-%06x"
+#define MQTT_USERNAME             ""
+#define MQTT_PASSWORD             ""
+#define MQTT_TOPIC_STATUS         "home/security/status"
+#define MQTT_TOPIC_COMMAND        "home/security/command"
+#define MQTT_TOPIC_CONFIG         "home/security/config"
+#define MQTT_KEEPALIVE_S          60
+#define MQTT_QOS                  1
 
 // ---------------------------------------------------------------------------
 // Debug

@@ -8,16 +8,29 @@
 #include <stdlib.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/event_groups.h"
 #include "driver/gpio.h"
 #include "driver/uart.h"
 #include "driver/ledc.h"
 #include "esp_log.h"
 #include "esp_timer.h"
+#include "esp_wifi.h"
+#include "esp_netif.h"
+#include "esp_event.h"
+#include "esp_http_server.h"
 #include "nvs_flash.h"
 #include "nvs.h"
+#include "cJSON.h"
 #include "config.h"
 
+#if ENABLE_WIFI && MQTT_ENABLED
+#include "mqtt_client.h"
+#endif
+
 static const char *TAG = "SECURITY";
+
+// State names for JSON serialization
+static const char* state_names[] = {"DISARMED", "EXITING", "ARMED", "ENTRY", "ALARM"};
 
 // ============================================================================
 // State Machine
@@ -57,6 +70,18 @@ bool g_alarm_latched = false;
 bool g_alarm_auto_timed_out = false;
 static bool g_button_last_state = false;  // Track button press state
 
+#if ENABLE_WIFI
+// WiFi state
+static EventGroupHandle_t s_wifi_event_group;
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
+static int s_wifi_retry_num = 0;
+static httpd_handle_t s_web_server = NULL;
+#if MQTT_ENABLED
+static esp_mqtt_client_handle_t s_mqtt_client = NULL;
+#endif
+#endif
+
 // ============================================================================
 // NVS
 // ============================================================================
@@ -68,7 +93,7 @@ static bool g_button_last_state = false;  // Track button press state
 // Forward Declarations
 // ============================================================================
 static void enter_state(system_state_t new_state);
-static void update_buzzer(uint64_t now_ms);
+static void update_buzzer(void);
 static void read_ultrasonic(void);
 static void read_reed_switch(void);
 static void read_tripwire(void);
@@ -84,6 +109,21 @@ static int64_t ultrasonic_read_echo(void);
 static void buzzer_pwm_init(void);
 static void buzzer_set_duty(uint32_t duty);
 static void buzzer_beep(uint32_t on_ms, uint32_t off_ms);
+
+#if ENABLE_WIFI
+static void wifi_init(void);
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+static void wifi_start_webserver(void);
+static void wifi_stop_webserver(void);
+static esp_err_t web_get_status(httpd_req_t *req);
+static esp_err_t web_post_command(httpd_req_t *req);
+static esp_err_t web_get_config(httpd_req_t *req);
+static esp_err_t web_post_config(httpd_req_t *req);
+static void publish_mqtt_status(void);
+#if MQTT_ENABLED
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+#endif
+#endif
 
 // ============================================================================
 // Buzzer PWM
@@ -296,6 +336,7 @@ static void read_reed_switch(void) {
 // IR Tripwire
 // ============================================================================
 static void read_tripwire(void) {
+#if IR_TRIPWIRE_ENABLED
     uint64_t now = get_time_ms();
     if (now - g_sensors.last_tripwire_ms < TRIPWIRE_CHECK_MS) return;
     g_sensors.last_tripwire_ms = now;
@@ -314,6 +355,10 @@ static void read_tripwire(void) {
     }
 
     g_sensors.tripwire_broken = raw;
+#else
+    // IR tripwire disabled - always report intact
+    g_sensors.tripwire_broken = false;
+#endif
 }
 
 // ============================================================================
@@ -391,7 +436,8 @@ static void enter_state(system_state_t new_state) {
     }
 }
 
-static void update_buzzer(uint64_t now) {
+static void update_buzzer(void) {
+    uint64_t now = get_time_ms();
     uint64_t elapsed = now - g_state_start_ms;
 
     switch (g_state) {
@@ -568,6 +614,11 @@ void app_main(void) {
     // Create UART task
     xTaskCreate(uart_task, "uart_task", 4096, NULL, 5, NULL);
 
+#if ENABLE_WIFI
+    // Initialize WiFi
+    wifi_init();
+#endif
+
     // Main loop
     while (1) {
         uint64_t now = get_time_ms();
@@ -587,7 +638,7 @@ void app_main(void) {
         }
 
         // Update buzzer/LEDs based on state
-        update_buzzer(now);
+        update_buzzer();
 
         // Periodic status print
         if (now - g_sensors.last_status_print_ms >= STATUS_PRINT_MS) {
@@ -595,6 +646,352 @@ void app_main(void) {
             print_status();
         }
 
+#if ENABLE_WIFI
+        // Publish MQTT status periodically
+        static uint64_t last_mqtt_publish = 0;
+        if (now - last_mqtt_publish >= 10000) { // Every 10 seconds
+            last_mqtt_publish = now;
+            publish_mqtt_status();
+        }
+#endif
+
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
+
+#if ENABLE_WIFI
+// ============================================================================
+// WiFi Implementation
+// ============================================================================
+
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        // Stop web server on disconnect
+        wifi_stop_webserver();
+        
+        if (s_wifi_retry_num < WIFI_MAX_RETRY) {
+            esp_wifi_connect();
+            s_wifi_retry_num++;
+            ESP_LOGI(TAG, "WiFi retry %d/%d", s_wifi_retry_num, WIFI_MAX_RETRY);
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+            ESP_LOGE(TAG, "WiFi connection failed after %d retries", WIFI_MAX_RETRY);
+        }
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TAG, "WiFi connected, IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        s_wifi_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+        
+        // Start web server
+        wifi_start_webserver();
+        
+#if MQTT_ENABLED
+        // Initialize MQTT
+        esp_mqtt_client_config_t mqtt_cfg = {
+            .broker.address.uri = MQTT_BROKER_URI,
+            .credentials.client_id = "esp32-security",
+            .credentials.username = MQTT_USERNAME,
+            .credentials.authentication.password = MQTT_PASSWORD,
+            .session.keepalive = MQTT_KEEPALIVE_S,
+        };
+        s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
+        esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
+        esp_mqtt_client_start(s_mqtt_client);
+#endif
+    }
+}
+
+static void wifi_init(void) {
+    s_wifi_event_group = xEventGroupCreate();
+    
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_sta();
+    
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, &instance_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, &instance_got_ip));
+    
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = WIFI_SSID,
+            .password = WIFI_PASSWORD,
+            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
+            .pmf_cfg = {
+                .capable = true,
+                .required = false
+            },
+        },
+    };
+    
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    
+    ESP_LOGI(TAG, "WiFi init complete, connecting to %s...", WIFI_SSID);
+    
+    // Wait for connection
+    EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
+            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+            pdFALSE, pdFALSE, portMAX_DELAY);
+    
+    if (bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "Connected to WiFi");
+    } else if (bits & WIFI_FAIL_BIT) {
+        ESP_LOGE(TAG, "Failed to connect to WiFi");
+    }
+}
+
+static void wifi_start_webserver(void) {
+    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.server_port = WEB_SERVER_PORT;
+    config.max_uri_handlers = WEB_SERVER_MAX_URI_HANDLERS;
+    
+    if (httpd_start(&s_web_server, &config) == ESP_OK) {
+        // GET /status - Get system status
+        httpd_uri_t status_uri = {
+            .uri = "/status",
+            .method = HTTP_GET,
+            .handler = web_get_status,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(s_web_server, &status_uri);
+        
+        // POST /command - Send command (arm, disarm, etc.)
+        httpd_uri_t command_uri = {
+            .uri = "/command",
+            .method = HTTP_POST,
+            .handler = web_post_command,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(s_web_server, &command_uri);
+        
+        // GET /config - Get configuration
+        httpd_uri_t config_get_uri = {
+            .uri = "/config",
+            .method = HTTP_GET,
+            .handler = web_get_config,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(s_web_server, &config_get_uri);
+        
+        // POST /config - Update configuration
+        httpd_uri_t config_post_uri = {
+            .uri = "/config",
+            .method = HTTP_POST,
+            .handler = web_post_config,
+            .user_ctx = NULL
+        };
+        httpd_register_uri_handler(s_web_server, &config_post_uri);
+        
+        ESP_LOGI(TAG, "Web server started on port %d", WEB_SERVER_PORT);
+    } else {
+        ESP_LOGE(TAG, "Failed to start web server");
+    }
+}
+
+static void wifi_stop_webserver(void) {
+    if (s_web_server) {
+        httpd_stop(s_web_server);
+        s_web_server = NULL;
+        ESP_LOGI(TAG, "Web server stopped");
+    }
+}
+
+static esp_err_t web_get_status(httpd_req_t *req) {
+    
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "state", state_names[g_state]);
+    cJSON_AddBoolToObject(root, "latched", g_alarm_latched);
+    cJSON_AddNumberToObject(root, "uptime_s", get_time_ms() / 1000);
+    
+    cJSON *sensors = cJSON_CreateObject();
+    cJSON_AddNumberToObject(sensors, "ultrasonic_cm", g_sensors.ultrasonic_distance_cm);
+    cJSON_AddBoolToObject(sensors, "ultrasonic_triggered", g_sensors.ultrasonic_triggered);
+    cJSON_AddBoolToObject(sensors, "reed_open", g_sensors.reed_open);
+    cJSON_AddBoolToObject(sensors, "tripwire_broken", g_sensors.tripwire_broken);
+    cJSON_AddItemToObject(root, "sensors", sensors);
+    
+    cJSON *delays = cJSON_CreateObject();
+    cJSON_AddNumberToObject(delays, "exit_delay_ms", EXIT_DELAY_MS);
+    cJSON_AddNumberToObject(delays, "entry_delay_ms", ENTRY_DELAY_MS);
+    cJSON_AddNumberToObject(delays, "alarm_timeout_ms", ALARM_TIMEOUT_MS);
+    cJSON_AddItemToObject(root, "delays", delays);
+    
+    cJSON *wifi = cJSON_CreateObject();
+    cJSON_AddStringToObject(wifi, "ssid", WIFI_SSID);
+    cJSON_AddNumberToObject(wifi, "rssi", 0);
+    cJSON_AddItemToObject(root, "wifi", wifi);
+    
+    char *json_str = cJSON_Print(root);
+    cJSON_Delete(root);
+    
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+    free(json_str);
+    
+    return ESP_OK;
+}
+
+static esp_err_t web_post_command(httpd_req_t *req) {
+    char buf[256];
+    int ret = httpd_req_recv(req, buf, sizeof(buf) - 1);
+    if (ret <= 0) {
+        return ESP_FAIL;
+    }
+    buf[ret] = '\0';
+    
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+        return ESP_FAIL;
+    }
+    
+    cJSON *cmd = cJSON_GetObjectItem(root, "command");
+    if (!cJSON_IsString(cmd)) {
+        cJSON_Delete(root);
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing command");
+        return ESP_FAIL;
+    }
+    
+    bool success = false;
+    const char *cmd_str = cmd->valuestring;
+    
+    if (strcmp(cmd_str, "arm") == 0) {
+        if (g_state == STATE_DISARMED || g_state == STATE_ALARM) {
+            enter_state(STATE_EXITING);
+            success = true;
+        }
+    } else if (strcmp(cmd_str, "disarm") == 0) {
+        enter_state(STATE_DISARMED);
+        success = true;
+    } else if (strcmp(cmd_str, "reset_alarm") == 0) {
+        g_alarm_latched = false;
+        if (g_state == STATE_ALARM) {
+            enter_state(STATE_DISARMED);
+        }
+        success = true;
+    } else if (strcmp(cmd_str, "status") == 0) {
+        success = true;
+    }
+    
+    cJSON_Delete(root);
+    
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", success);
+    cJSON_AddStringToObject(response, "state", state_names[g_state]);
+    char *json_str = cJSON_Print(response);
+    cJSON_Delete(response);
+    
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+    free(json_str);
+    
+    return ESP_OK;
+}
+
+static esp_err_t web_get_config(httpd_req_t *req) {
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddNumberToObject(root, "exit_delay_ms", EXIT_DELAY_MS);
+    cJSON_AddNumberToObject(root, "entry_delay_ms", ENTRY_DELAY_MS);
+    cJSON_AddNumberToObject(root, "alarm_timeout_ms", ALARM_TIMEOUT_MS);
+    cJSON_AddNumberToObject(root, "ultrasonic_trigger_cm", ULTRASONIC_TRIGGER_CM);
+    cJSON_AddBoolToObject(root, "ir_tripwire_enabled", IR_TRIPWIRE_ENABLED);
+    
+    char *json_str = cJSON_Print(root);
+    cJSON_Delete(root);
+    
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+    free(json_str);
+    
+    return ESP_OK;
+}
+
+static esp_err_t web_post_config(httpd_req_t *req) {
+    // Config changes require recompile in this version
+    // Could be extended to save to NVS
+    cJSON *response = cJSON_CreateObject();
+    cJSON_AddBoolToObject(response, "success", false);
+    cJSON_AddStringToObject(response, "error", "Config changes require recompile");
+    char *json_str = cJSON_Print(response);
+    cJSON_Delete(response);
+    
+    httpd_resp_set_type(req, "application/json");
+    httpd_resp_send(req, json_str, strlen(json_str));
+    free(json_str);
+    
+    return ESP_OK;
+}
+
+static void publish_mqtt_status(void) {
+#if MQTT_ENABLED
+    if (!s_mqtt_client) return;
+    
+    const char* state_names[] = {"DISARMED", "EXITING", "ARMED", "ENTRY", "ALARM"};
+    
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "state", state_names[g_state]);
+    cJSON_AddBoolToObject(root, "latched", g_alarm_latched);
+    cJSON_AddNumberToObject(root, "uptime_s", get_time_ms() / 1000);
+    cJSON_AddNumberToObject(root, "ultrasonic_cm", g_sensors.ultrasonic_distance_cm);
+    cJSON_AddBoolToObject(root, "ultrasonic_triggered", g_sensors.ultrasonic_triggered);
+    cJSON_AddBoolToObject(root, "reed_open", g_sensors.reed_open);
+    cJSON_AddBoolToObject(root, "tripwire_broken", g_sensors.tripwire_broken);
+    
+    char *json_str = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    
+    esp_mqtt_client_publish(s_mqtt_client, MQTT_TOPIC_STATUS, json_str, 0, MQTT_QOS, 0);
+    free(json_str);
+#endif
+}
+
+#if MQTT_ENABLED
+static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    esp_mqtt_event_handle_t event = (esp_mqtt_event_handle_t) event_data;
+    
+    switch (event->event_id) {
+        case MQTT_EVENT_CONNECTED:
+            ESP_LOGI(TAG, "MQTT connected");
+            esp_mqtt_client_subscribe(s_mqtt_client, MQTT_TOPIC_COMMAND, MQTT_QOS);
+            break;
+        case MQTT_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "MQTT disconnected");
+            break;
+        case MQTT_EVENT_SUBSCRIBED:
+            ESP_LOGI(TAG, "MQTT subscribed, msg_id=%d", event->msg_id);
+            break;
+        case MQTT_EVENT_DATA:
+            // Handle incoming commands
+            if (strncmp(event->topic, MQTT_TOPIC_COMMAND, event->topic_len) == 0) {
+                char *data = strndup(event->data, event->data_len);
+                cJSON *root = cJSON_Parse(data);
+                if (root) {
+                    cJSON *cmd = cJSON_GetObjectItem(root, "command");
+                    if (cJSON_IsString(cmd)) {
+                        // Reuse command logic
+                        if (strcmp(cmd->valuestring, "arm") == 0 && (g_state == STATE_DISARMED || g_state == STATE_ALARM)) {
+                            enter_state(STATE_EXITING);
+                        } else if (strcmp(cmd->valuestring, "disarm") == 0) {
+                            enter_state(STATE_DISARMED);
+                        }
+                    }
+                    cJSON_Delete(root);
+                }
+                free(data);
+            }
+            break;
+        default:
+            break;
+    }
+}
+#endif
+#endif
