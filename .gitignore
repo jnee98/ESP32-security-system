@@ -1,6 +1,8 @@
 secrets.h
 .pio/
 build/
+sdkconfig
+sdkconfig.old
 *.o
 *.bin
 .DS_Store

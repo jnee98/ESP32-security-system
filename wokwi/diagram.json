@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "author": "jnee98",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-c6-devkit", "id": "esp", "top": 0, "left": 0, "attrs": {} },
+    { "type": "wokwi-hc-sr04", "id": "ultra", "top": 0, "left": 180, "attrs": {} },
+    { "type": "wokwi-led", "id": "ledArmed", "top": 80, "left": 120, "attrs": { "color": "green" } },
+    { "type": "wokwi-led", "id": "ledAlarm", "top": 140, "left": 120, "attrs": { "color": "red" } },
+    { "type": "wokwi-piezo-buzzer", "id": "buzzer", "top": 200, "left": 120, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "reed", "top": 280, "left": 120, "attrs": {} },
+    { "type": "wokwi-pushbutton", "id": "irTripwire", "top": 340, "left": 120, "attrs": {} }
+  ],
+  "connections": [
+    [ "esp:4", "ultra:TRIG", "" ],
+    [ "esp:5", "ultra:ECHO", "" ],
+    [ "esp:6", "reed:1", "" ],
+    [ "reed:2", "esp:GND.1", "" ],
+    [ "esp:7", "irTripwire:1", "" ],
+    [ "irTripwire:2", "esp:GND.2", "" ],
+    [ "esp:10", "ledArmed:A", "" ],
+    [ "ledArmed:C", "esp:GND.3", "" ],
+    [ "esp:11", "ledAlarm:A", "" ],
+    [ "ledAlarm:C", "esp:GND.4", "" ],
+    [ "esp:12", "buzzer:1", "" ],
+    [ "buzzer:2", "esp:GND.5", "" ]
+  ]
+}
